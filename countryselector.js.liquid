@@ -1,0 +1,144 @@
+/* Insert translations for each language you want to use */
+const translations = {
+    DEFAULT: {
+        "modalText": "Hey, Are you English?",
+        "modalAccept": "Yes",
+        "modalCancel": 'No'
+    },
+    DK: {
+        "modalText": "Hey, Er du fra Danmark?",
+        "modalAccept": "Ja!",
+        "modalCancel": 'Nej'
+    },
+    DE: {
+        "modalText": "Hallo, Kommst Du aus Deutschland?",
+        "modalAccept": "Ja",
+        "modalCancel": 'Nein'
+    }
+}
+
+/* Insert each site as a new object with URL in format https://example.com */
+
+const sites = {
+    DEFAULT: {
+        'site': "https://example.com"
+    },
+    EU: {
+        'site': 'https://example.com'
+    },
+    NL: {
+        'site': 'https://example.com'
+    },
+    NO: {
+        'site': 'https://example.com'
+    }
+}
+
+/* Insert URL to IP-API */ 
+async function getUserIp() {
+    return fetch('https://ipapi.co/json/')
+        .then(response => response.json())
+}
+
+async function getCodes() {
+    const countryCodes = "{{ 'countrycodes.json' | asset_url }}";
+    return fetch(countryCodes)
+        .then(response => response.json())
+}
+
+function getSiteLanguage() {
+
+    for (let site in sites) {
+
+        if (sites[site]['site'] == window.location.origin) {
+            return site;
+        }
+    }
+
+}
+
+const localStorageIdentifier = 'geolocation';
+const LS = localStorage.getItem(localStorageIdentifier + '_userPreferredSite');
+const currentSiteLanguage = getSiteLanguage();
+
+if (LS != currentSiteLanguage) {
+    checkMisMatch();;
+}
+
+async function checkMisMatch() {
+
+    const ipApi = await getUserIp();
+    const UserCountryCode = ipApi.country_code;
+    const CountryCodes = await getCodes();
+    let RegionCode = 'DEFAULT'; /* Init RegionCode and set it to Default if region is not found */
+    let RegionLanguage = 'DEFAULT'; /* Init Language and set it to Default if language is not found */
+
+    /* Check which site the users country code is attached to */
+    for (let AllRegions in CountryCodes) {
+        for (let i = 0; i < CountryCodes[AllRegions].length; i++) {
+            if (UserCountryCode == CountryCodes[AllRegions][i]['code']) {
+                RegionCode = AllRegions;
+            }
+        }
+    }
+
+    /* Check which Language is attached to user */
+    for (let language in translations) {
+        if (language == UserCountryCode) {
+            console.log('User language is ' + language);
+            RegionLanguage = language;
+        }
+    }
+
+    /* Check MisMatch */
+    if (sites[RegionCode]['site'] != window.location.origin) {
+        const modalInfo = fetchModalInfo(currentSiteLanguage, RegionCode, RegionLanguage); /* Generate modal Object with information */
+        console.log(modalInfo);
+        showDialog(modalInfo);
+    }
+}
+
+
+function fetchModalInfo(currentSiteLanguage, RegionCode, RegionLanguage) {
+    const modalInfo = {
+        "currentSite": currentSiteLanguage,
+        "redirectSite": RegionCode,
+        "modalText": translations[RegionLanguage]['modalText'],
+        "modalAccept": translations[RegionLanguage]['modalAccept'],
+        "modalCancel": translations[RegionLanguage]['modalCancel'],
+        "modalRedirect": sites[RegionCode]['site']
+    };
+    return modalInfo;
+}
+
+function showDialog(modalInfo) {
+    const wrapper = document.querySelector('#countryselector');
+
+    fetch(window.Shopify.routes.root + '?sections=countryselector')
+        .then(response => response.json())
+        .then(data => {
+            wrapper.innerHTML = data.countryselector;
+            const result = new DOMParser().parseFromString(data.countryselector, 'text/html');
+
+            result.querySelector('#countrySelector--text').innerHTML = modalInfo['modalText'];
+            result.querySelector('#countrySelector--button_one').innerHTML = modalInfo['modalAccept'];
+            result.querySelector('#countrySelector--button_two').innerHTML = modalInfo['modalCancel'];
+
+            const resultMarkup = result.querySelector('.countrySelector').innerHTML;
+
+            wrapper.innerHTML = resultMarkup;
+
+            handleDialogActions(modalInfo);
+        });
+}
+
+function handleDialogActions(modalInfo) {
+    document.querySelector('#countrySelector--button_one').addEventListener('click', () => {
+        window.location.replace(modalInfo['modalRedirect']) /* If Yes is clicked, redirect to new site/page */
+        localStorage.setItem(localStorageIdentifier + '_userPreferredSite', modalInfo['redirectSite']);
+    })
+    document.querySelector('#countrySelector--button_two').addEventListener('click', () => {
+        document.querySelector('#countryselector').remove(); /* If No is clicked, remove HTML and set localStorage */
+        localStorage.setItem(localStorageIdentifier + '_userPreferredSite', modalInfo['currentSite']);
+    })
+}
